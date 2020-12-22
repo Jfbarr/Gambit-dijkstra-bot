@@ -24,6 +24,8 @@ class Agent:
         self.all_bombs = []
         self.all_explosions = []
         self.previous_bombs = set()
+        
+        
     def generate_one_reward_map(self, state):
         state_pad = np.zeros((14,12))
         state_pad[1:-1, 1:-1] = state
@@ -37,10 +39,10 @@ class Agent:
                 reward_map[x,y] = np.dot(sub_matrix[0], score_conv[0]) \
                                 + np.dot(sub_matrix[1], score_conv[1]) \
                                 + np.dot(sub_matrix[2], score_conv[2])
-        
         return reward_map
+    
+    
     def generate_reward_map(self, state):
-
         def evaluate_sub_matrix(mat):
             directions = [
                 np.array([ 1, 0]),  # right
@@ -67,21 +69,16 @@ class Agent:
         state_pad = np.zeros((16,14))
         state_pad[2:-2, 2:-2] = state
         score_conv = [[0,1,0],[1,0,1],[0,1,0]]
-        #state_pad = np.where(state_pad ==np.nan, 0,state_pad)
         reward_map = np.zeros((12,10))
-        #state_pad[np.isnan(state_pad)]=0
         for x in range(12):
             for y in range(10):
                 sub_matrix = state_pad[x:x+5, y:y+5]
                 reward_map[x,y] = evaluate_sub_matrix(sub_matrix)
-        #print(reward_map)
         return reward_map
-
 
     def generate_walls(self, game_state, player_state):
         return game_state.all_blocks + game_state.bombs + game_state.opponents(player_state.id)
-    
-    
+        
     def generate_reward_dijkstra(self,game_state, player_state):
         """
         Generate a dijkstra map representing the agents desire
@@ -97,6 +94,7 @@ class Agent:
             np.array([-1, 0]),
         ]
         explosion_tiles = []
+        
         # Populate list of tiles that will explode
         for bomb in game_state.bombs:
             explosion_tiles.append(bomb)
@@ -109,34 +107,24 @@ class Agent:
                     else:
                         explosion_tiles.append(e_tile)
         
-
-        
         game_board = np.zeros((12,10))
         for soft_block_idx in game_state.soft_blocks:
             if soft_block_idx in explosion_tiles:
-                #print("Setting value to 0, in explosion already")
                 game_board[soft_block_idx] = 0
             else:
                 game_board[soft_block_idx] = 2
         for ore_block_idx in game_state.ore_blocks:
             ore_ex = [e for e in self.all_explosions if e == ore_block_idx] 
             if len(ore_ex)==0:
-                #print("No explosion at: ", ore_block_idx)
                 game_board[ore_block_idx]  = 0.5
             if len(ore_ex)==1:
-                #print("1 explosion at: ", ore_block_idx)
                 game_board[ore_block_idx]  = 3
             if len(ore_ex)>=2:
-                #print("2 explosion at: ", ore_block_idx)
                 game_board[ore_block_idx]  = 11
-            #game_board[ore_block_idx]  = 10 #REVERT TO THIS LINE IF FAIL
         for indestructible_block_idx in game_state.indestructible_blocks:
             game_board[indestructible_block_idx] = np.nan
-
-        #walls=np.argwhere(np.isnan(game_board))
-        #wall_indices = game_state.all_blocks + game_state.bombs
+            
         wall_indices = self.generate_walls(game_state, player_state)
-        #print(wall_indices)
         reward_dijkstra = DijkstraMap(12, 10, wall_indices)
         if len(game_state.ore_blocks + game_state.soft_blocks)<5:
             score_map = self.generate_one_reward_map(game_board)
@@ -147,7 +135,6 @@ class Agent:
         for goal in goal_indices:
             reward_dijkstra.add_goal(int(goal[0]), int(goal[1]),-1*score_map[goal[0], goal[1]])
         reward_dijkstra.recalculate_map()
-        #print("REWARD MAP:\n", reward_dijkstra)
         return reward_dijkstra
 
     def generate_bomb_flee_dijkstra(self, game_state, player_state):
@@ -159,28 +146,24 @@ class Agent:
         """
         
         wall_indices = game_state.all_blocks
-        
         bomb_dijkstra = DijkstraMap(12,10,wall_indices)            
-        
         goal_indices = game_state.bombs
+        
         for goal in goal_indices:
             bomb_dijkstra.add_goal(int(goal[0]), int(goal[1]),-1)
         bomb_dijkstra.recalculate_map()
-       # print("BOMBS AT:", bomb_dijkstra)
-        #print("TILES VIEW:", bomb_dijkstra.tiles)
         bomb_dijkstra = -1.3*bomb_dijkstra
-        #print("MULTIPLIED: ", bomb_dijkstra)
         bomb_dijkstra.recalculate_map(clear=False)
         return bomb_dijkstra
     
     
     
     def generate_bomb_safe_dijkstra_high_timer(self, game_state, player_state):
-        #wall_indices = game_state.all_blocks + game_state.bombs
+
         wall_indices = self.generate_walls(game_state, player_state)
         bomb_dijkstra = DijkstraMap(12,10,wall_indices) 
         bomb_indices = []
-        
+
         directions = [
             np.array([ 0, 1]),
             np.array([ 0,-1]),
@@ -188,6 +171,7 @@ class Agent:
             np.array([-1, 0]),
         ]
         explosion_tiles = []
+        
         # Populate list of tiles that will explode
         bombs = [(b[0], b[1]) for b in self.current_bombs if self.tick - b[2] >30]
         for bomb in bombs:
@@ -206,7 +190,6 @@ class Agent:
                 else:
                     bomb_dijkstra.add_goal(x,y,0)
         bomb_dijkstra.recalculate_map()
-        #print("BOMB DIJKSTRA", bomb_dijkstra)
         return bomb_dijkstra     
     
     
@@ -224,6 +207,7 @@ class Agent:
             np.array([-1, 0]),
         ]
         explosion_tiles = []
+        
         # Populate list of tiles that will explode
         for bomb in game_state.bombs:
             explosion_tiles.append(bomb)
@@ -241,12 +225,11 @@ class Agent:
                 else:
                     bomb_dijkstra.add_goal(x,y,0)
         bomb_dijkstra.recalculate_map()
-        
         return bomb_dijkstra   
 
 
     def generate_ammo_dijkstra(self, game_state, player_state):
-        #wall_indices = game_state.all_blocks + game_state.bombs
+        
         wall_indices = self.generate_walls(game_state, player_state)
         ammo_dijkstra = DijkstraMap(12,10,wall_indices) 
         for ammo in game_state.ammo:
@@ -257,7 +240,7 @@ class Agent:
         return ammo_dijkstra
     
     def generate_treasure_dijkstra(self, game_state, player_state):
-        #wall_indices = game_state.all_blocks + game_state.bombs
+        
         wall_indices = self.generate_walls(game_state, player_state)
         treasure_dijkstra = DijkstraMap(12,10,wall_indices) 
         for treasure in game_state.treasure:
@@ -266,9 +249,7 @@ class Agent:
         return treasure_dijkstra
 
     def check_bomb_location(self, game_state, player_state):
-        """
-        param: tuple location
-        """
+ 
         directions = [
             np.array([ 0, 1]),
             np.array([ 0,-1]),
@@ -282,7 +263,7 @@ class Agent:
             game_board[ore_block_idx]  = 10
         for indestructible_block_idx in game_state.indestructible_blocks:
             game_board[indestructible_block_idx] = np.nan
-        #walls=np.argwhere(np.isnan(game_board))
+
         score_map = self.generate_reward_map(game_board)
         walls = self.generate_walls(game_state, player_state)
         safety_dijkstra = DijkstraMap(12,10,walls)
@@ -303,7 +284,7 @@ class Agent:
                 else:
                     safety_dijkstra.add_goal(x,y,0)
         safety_dijkstra.recalculate_map()
-        #print("SHOULD I PLACE A BOMB?: \n",safety_dijkstra)
+
         if score_map[player_state.location[0]][player_state.location[1]] >0:
             if  safety_dijkstra._get_lowest_neighbor_value(player_state.location[0], player_state.location[1]) < 50:
                 return True
@@ -341,23 +322,15 @@ class Agent:
         for goal in game_state.opponents(player_state.id):
             run_dijkstra.add_goal(int(goal[0]), int(goal[1]),0)
         run_dijkstra.recalculate_map()
-       # print("BOMBS AT:", run_dijkstra)
-        #print("TILES VIEW:", run_dijkstra.tiles)
         run_dijkstra = -1.2*run_dijkstra
-        #print("MULTIPLIED: ", run_dijkstra)
         run_dijkstra.recalculate_map(clear=False)
         return run_dijkstra
+    
     def next_move(self, game_state, player_state):
-        '''
-        This method is called each time the player needs to choose an 
-        action
-        solid_state: is a dictionary containing all the information about the board
-        ''' 
-        #print("_______________________________________________________________________")
+        
         self.tick+=1
         if self.previous_location:
             if self.previous_location == player_state.location and self.previous_move in ('l','r','d','u') and (self.tick - self.previous_tick)<=2:
-                #print("SKIPPING TURN")
                 return None
 
         for bomb in game_state.bombs:
@@ -386,20 +359,7 @@ class Agent:
                                 break
                             else:
                                 self.all_explosions.append(e_tile)
-            #print("Bomb appended: ", self.all_bombs)
-            #print("Explosions appended: ", self.all_explosions)
-      #  print("PREV:", self.previous_location)
-      #  print("CURRENT: ", player_state.location)
-       # print("PREV MOVE: ", self.previous_move)
-        #print("TICK: ", self.tick)
-       # print("PREV TICK: ", self.previous_tick)
 
-        #if self.previous_location:
-        #    if self.previous_location == player_state.location and self.previous_move in ('l','r','d','u') and (self.tick - self.previous_tick)<3:
-        #        print("SKIPPING TURN")
-        #        return None
-        t0 = time.time()
-        
         if len(game_state.ore_blocks + game_state.soft_blocks)==0:
             self.desire['player-aversion']=1
             self.desire['run'] = 0.25
@@ -409,24 +369,24 @@ class Agent:
         if player_state.ammo <=1:
             self.desire['ammo']=9
             if player_state.ammo == 0:
-                self.desire['reward']=0.5 #1 scrim 2
+                self.desire['reward']=0.5
             else:
                 self.desire['reward']=2
         else:
-            self.desire['ammo']= 1.4 #2 low, 4 standard, 7 high
+            self.desire['ammo']= 1.4 
         if player_state.hp ==1:
             self.desire['safe']=8
         else:
-            self.desire['safe']=1 # 1 risky, 3 standard, 8 safe
+            self.desire['safe']=1 
         
         bomb_dijkstra = self.generate_bomb_flee_dijkstra(game_state, player_state)
         reward_dijkstra = self.generate_reward_dijkstra(game_state, player_state)
         ammo_dijkstra = self.generate_ammo_dijkstra(game_state, player_state)
-        #dead_end_dijkstra = self.generate_dead_end_dijkstra(game_state, player_state)
         self.safe_bomb_dijkstra = self.generate_bomb_safe_dijkstra(game_state, player_state)
         flee_enemy_dijkstra = self.generate_enemy_flee_dijkstra(game_state, player_state)
         run_dijkstra = self.generate_run_dijkstra(game_state, player_state)
         treasure_dijkstra = self.generate_treasure_dijkstra(game_state, player_state)
+        
         goal_dijkstra = self.desire['reward'] * reward_dijkstra \
                       + self.desire['safe']   * self.safe_bomb_dijkstra \
                       + self.desire['flee']   * bomb_dijkstra \
@@ -435,7 +395,7 @@ class Agent:
                       + self.desire['player-aversion'] * flee_enemy_dijkstra \
                       + self.desire['run'] * run_dijkstra \
                       + self.desire['treasure'] * treasure_dijkstra
-                   #   + dead_end_dijkstra
+
         self.safe_bomb_dijkstra_high = self.generate_bomb_safe_dijkstra_high_timer(game_state, player_state)
         player_location = player_state.location
         
@@ -468,7 +428,6 @@ class Agent:
         action = move_dict[move]
         self.previous_bombs = set(game_state.bombs)
         if game_state.entity_at((player_location[0]+move[0], player_location[1]+move[1])) ==1-player_state.id:
-            #print("Doing nothing because of opponent")
             action = ''
             self.previous_move = action
             self.previous_location = player_location
@@ -478,32 +437,11 @@ class Agent:
         if action == '':
             if self.check_bomb_location(game_state, player_state) and player_state.ammo>0:
                 action = 'b'
-        #print("Location: ", player_state.location)
-        #print("Move: ", move)
-        #print("Action: ",action)
         
         self.previous_move = action
         self.previous_location = player_location
         self.previous_tick = self.tick
-        t1 = time.time()
-        
-        #print("PLAYER ID: ", player_state.id)
-        #print('Reward: \n',reward_dijkstra)
-        #print('Bomb flee: \n', bomb_dijkstra)
-        #print('Ammo: \n', ammo_dijkstra)
-        #print('Bomb safety: \n', self.safe_bomb_dijkstra)
-        #print('Bomb safety high: \n', self.safe_bomb_dijkstra_high)
-        #print("TREASURE: \n", treasure_dijkstra)
-        #print("CENTER: \n", flee_enemy_dijkstra)
-        #print("RUN: \n", run_dijkstra)
-        #print(goal_dijkstra)
-        #print("TIME TAKEN(ms): ", (t1-t0)*1000)
-        #print(action)
-        
-        #print("TICK: ", self.tick)
-        #print("GAME TICK: ", game_state.tick_number)
-        
-        #print('*'*20)
+
         return action
 
 
